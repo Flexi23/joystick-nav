@@ -2,7 +2,7 @@
 
 **A reusable, procedural 3D model of a 5-DoF HOTAS controller with live Gamepad API bindings.**
 
-Built as a reference implementation for the [Thrustmaster T.Flight HOTAS One](https://www.thrustmaster.com/products/t-flight-hotas-one/), this project provides an interactive, browser-based 3D visualization that maps all 5 degrees of freedom and 17 buttons in real time. It is designed to be easily adapted for generating controller bindings for different applications — with or without AI assistance.
+Built as a reference implementation for the [Thrustmaster T.Flight HOTAS One](https://www.thrustmaster.com/products/t-flight-hotas-one/), this project provides an interactive, browser-based 3D visualization that maps all 5 degrees of freedom and 15 buttons in real time. It is designed to be easily adapted for generating controller bindings for different applications — with or without AI assistance.
 
 > Created with the help of **Claude Opus 4.6**. The model description in [`SETUP-MODEL.md`](SETUP-MODEL.md) is structured so that an AI coding agent can understand the controller layout and generate input bindings for arbitrary applications.
 
