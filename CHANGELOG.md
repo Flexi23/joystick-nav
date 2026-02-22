@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-02-22
+
+### Added
+- **Tilted grip cap** — upper grip topped with a hemisphere + flat disc, tilted 45° away from camera; hat switch, btn1, btn3 mounted on tilted surface
+- **Button 2** (red) placed on grip side near trigger, on hemisphere surface
+- **Sloped grip top** — `gripUpper` cylinder vertices modified so top face aligns with tilted hemisphere
+- **Click to toggle autoRotate** — clean clicks toggle camera auto-rotation; drag gestures are excluded (< 4px threshold)
+
+### Changed
+- **Throttle axis normalized** to −1 … +1 (was 0 … 1), inverted to match physical lever direction
+- **Button mapping tables** updated in README.md and SETUP-MODEL.md with correct variable names and locations
+- **Materials table** in SETUP-MODEL.md corrected to match current hex values; removed unused `matXbox`/`matThrottle`
+- **Scene graph** in SETUP-MODEL.md updated to reflect `capTilt` hierarchy with hemisphere, disc, and repositioned buttons
+
+### Fixed
+- Z-fighting on hemisphere cap disc (nudged 0.002*S above hemisphere base)
+
 ## [0.4.0] - 2026-02-22
 
 ### Added

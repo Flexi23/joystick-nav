@@ -31,7 +31,7 @@ Built as a reference implementation for the [Thrustmaster T.Flight HOTAS One](ht
 |---|---|---|---|
 | **Roll** (Stick X) | 0 | −1 … +1 | Stick tilts left / right |
 | **Pitch** (Stick Y) | 1 | −1 … +1 | Stick tilts forward / backward |
-| **Throttle** | 2 | −1 … +1 → 0 … 1 | Throttle lever tilts along rail |
+| **Throttle** | 2 | −1 … +1 | Throttle lever tilts along rail |
 | **Yaw** (Twist) | 5 | −1 … +1 | Stick rotates around vertical axis |
 | **Rocker** | 7 | −1 … +1 | Rocker switch tilts on throttle back |
 | **Hat** (8-way POV) | 9 | discrete | Hat knob displacement |
@@ -40,19 +40,25 @@ Built as a reference implementation for the [Thrustmaster T.Flight HOTAS One](ht
 
 ## Button Mapping
 
-| Index | Location | Description |
-|---|---|---|
-| 0 | Stick | Trigger (index finger) |
-| 1 | Stick | Center top button |
-| 2 | — | (unused) |
-| 3 | Stick | Right top button |
-| 4–7 | Throttle +X | Thumb buttons (top → bottom) |
-| 8–9 | Throttle −Z | Back face buttons (top, bottom) |
-| 10–11 | Base | Left / right of LED toggle |
-| 12–13 | Base | Triangle bottom-left / bottom-right |
-| 14 | Base | Triangle top |
-| 15 | — | (unused) |
-| 16 | Base | LED toggle (firmware-only, no API event) |
+| Index | Variable | Location | Description |
+|---|---|---|---|
+| 0 | `triggerBody` | Stick | Trigger (index finger, red) |
+| 1 | `btn1` | Stick cap | Center top button (on tilted hemisphere) |
+| 2 | `btn2` | Stick grip | Side button near trigger (red) |
+| 3 | `btn3` | Stick cap | Right top button (on tilted hemisphere) |
+| 4 | `tBtn4` | Throttle +X | Thumb column, top |
+| 5 | `tBtn5` | Throttle +X | Thumb column, middle |
+| 6 | `tBtn6` | Throttle +X | Thumb column, bottom |
+| 7 | `tBtn7` | Throttle +X | Thumb column, lower (extra gap) |
+| 8 | `tBtn8` | Throttle −Z | Back face, right of rocker, top |
+| 9 | `tBtn9` | Throttle −Z | Back face, right of rocker, bottom |
+| 10 | `btn10` | Base | Left of LED toggle |
+| 11 | `btn11` | Base | Right of LED toggle |
+| 12 | `btn12` | Base | Triangle bottom-left |
+| 13 | `btn13` | Base | Triangle bottom-right |
+| 14 | `btn14` | Base | Triangle top |
+| 15 | — | — | (unused) |
+| 16 | — | Base | LED toggle (firmware-only, no API event) |
 
 ## Controls
 

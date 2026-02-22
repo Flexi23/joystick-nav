@@ -503,7 +503,7 @@ function pollGamepad() {
 	state.roll = applyDeadzone(gp.axes[AXIS_ROLL] || 0);
 	state.pitch = applyDeadzone(gp.axes[AXIS_PITCH] || 0);
 	state.yaw = -applyDeadzone(gp.axes[AXIS_YAW] || 0);
-	state.throttle = (1 + (gp.axes[AXIS_THROTTLE] || 0)) / 2;
+	state.throttle = -applyDeadzone(gp.axes[AXIS_THROTTLE] || 0);
 	state.rocker = applyDeadzone(gp.axes[AXIS_ROCKER] || 0);
 }
 
@@ -557,7 +557,7 @@ function animate() {
 	gimbalPivot.rotation.x = smooth.pitch * STICK_MAX_ANGLE;
 	gimbalPivot.rotation.z = -smooth.roll * STICK_MAX_ANGLE;
 	twistPivot.rotation.y = smooth.yaw * TWIST_MAX_ANGLE;
-	throttlePivot.rotation.x = lerp(-THROTTLE_TILT_ANGLE, THROTTLE_TILT_ANGLE, smooth.throttle);
+	throttlePivot.rotation.x = smooth.throttle * THROTTLE_TILT_ANGLE;
 	rockerPivot.rotation.y = -smooth.rocker * ROCKER_MAX_ANGLE;
 	triggerPivot.rotation.x = state.buttons[0] ? -0.35 : 0;
 
@@ -597,6 +597,16 @@ window.addEventListener('resize', () => {
 	outlineEffect.setSize(innerWidth, innerHeight);
 });
 
+{ // autoRotate toggle — only on clean clicks, not drags
+	let downX, downY;
+	renderer.domElement.addEventListener('pointerdown', e => { downX = e.clientX; downY = e.clientY; });
+	renderer.domElement.addEventListener('pointerup', e => {
+		if (Math.hypot(e.clientX - downX, e.clientY - downY) < 4) {
+			controls.autoRotate = !controls.autoRotate;
+		}
+	});
+}
+
 // ── Keyboard Fallback ──
 const keys = {};
 window.addEventListener('keydown', e => { keys[e.code] = true; });
@@ -612,8 +622,9 @@ pollGamepad = function() {
 		if (keys['KeyD']) state.roll = lerp(state.roll, 1, 0.15);
 		if (keys['KeyQ']) state.yaw = lerp(state.yaw, -1, 0.15);
 		if (keys['KeyE']) state.yaw = lerp(state.yaw, 1, 0.15);
-		if (keys['KeyR']) state.throttle = Math.min(1, state.throttle + 0.02);
-		if (keys['KeyF']) state.throttle = Math.max(0, state.throttle - 0.02);
+		if (keys['KeyR']) state.throttle = Math.min(1, state.throttle + 0.04);
+		if (keys['KeyF']) state.throttle = Math.max(-1, state.throttle - 0.04);
+		if (!keys['KeyR'] && !keys['KeyF']) state.throttle *= 0.92;
 		if (!keys['KeyW'] && !keys['KeyS']) state.pitch *= 0.92;
 		if (!keys['KeyA'] && !keys['KeyD']) state.roll *= 0.92;
 		if (!keys['KeyQ'] && !keys['KeyE']) state.yaw *= 0.92;

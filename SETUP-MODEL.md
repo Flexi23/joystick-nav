@@ -78,19 +78,21 @@ stickUnit (dome group @ +DOME_X, PLATE_THICKNESS, 0)
  │   └─ twistPivot (Group) ← animated: rotation.y (yaw)
  │       ├─ bellows (rubber cylinder, BELLOWS_R_TOP→BELLOWS_R_BOT)
  │       ├─ shaft (tapered cylinder, SHAFT_R_TOP→SHAFT_R_BOT)
- │       └─ gripGroup (Group, y=3.0)
+ │       └─ gripGroup (Group, y=12.77*S)
  │           ├─ gripLower (cylinder, palm)
- │           ├─ gripUpper (cylinder)
- │           ├─ gripCap (flat cylinder, button platform)
- │           ├─ finger grooves (3× box, front of grip)
- │           ├─ triggerPivot (Group, y=1.3, z=−0.35) ← animated: rotation.x on button 0
- │           │   ├─ triggerBody (box) ← Button 0
+ │           ├─ gripUpper (cylinder, top sloped 45° to match hemisphere)
+ │           ├─ capTilt (Group, y=6.17*S, rot.x=π/4) ─ tilted 45° away from camera
+ │           │   ├─ gripHemi (hemisphere, r=1.79*S, dome down)
+ │           │   ├─ capDisc (circle, flat top surface)
+ │           │   ├─ hatGroup (Group, x=−1.19*S, y=0.5*S)
+ │           │   │   ├─ hat base (cylinder)
+ │           │   │   └─ hatKnob (sphere) ← animated: position.x/z from axis 9
+ │           │   ├─ btn1 (cylinder, y=0.5*S, center) ← Button 1
+ │           │   └─ btn3 (cylinder, x=+1.19*S, y=0.5*S) ← Button 3
+ │           ├─ btn2 (cylinder, red, x=1.0*S, y=5.2*S, z=−1.5*S) ← Button 2, near trigger
+ │           ├─ triggerPivot (Group, y=5.53*S, z=−1.49*S) ← animated: rotation.x on button 0
+ │           │   ├─ triggerBody (box, red) ← Button 0
  │           │   └─ triggerGuard (torus arc)
- │           ├─ hatGroup (Group, x=−0.28, y=1.62)
- │           │   ├─ hat base (cylinder)
- │           │   └─ hatKnob (sphere) ← animated: position.x/z from axis 9
- │           ├─ btn1 (cylinder, y=1.62, center) ← Button 1
- │           └─ btn3 (cylinder, x=+0.28, y=1.62, right) ← Button 3
 ```
 
 ### Stick Controls
@@ -102,10 +104,11 @@ stickUnit (dome group @ +DOME_X, PLATE_THICKNESS, 0)
 | Yaw (Twist) | Analog axis | Axis 5 | twistPivot.rotation.y, max ±π/4 (inverted) |
 | Trigger | Button | Button 0 | triggerPivot.rotation.x = −0.35 |
 | Center top | Button | Button 1 | Material swap (green glow) |
+| Side near trigger | Button | Button 2 | Material swap (red → green glow) |
 | Right top | Button | Button 3 | Material swap (green glow) |
 | Hat switch | 8-way POV | Axis 9 | hatKnob position offset ±0.05 |
 
-> Button 2 is a placeholder (null) – not physically on the stick top.
+> Button 2 is a red button on the grip side, next to the trigger, on the hemisphere surface.
 
 ## Throttle Unit (left hand)
 
@@ -196,7 +199,7 @@ Between the two stick units, centered at X = 0, on the pedestal surface.
 |---|---|---|---|
 | 0 | Stick X (Roll) | −1 … +1 | Deadzone applied |
 | 1 | Stick Y (Pitch) | −1 … +1 | Deadzone applied |
-| 2 | Throttle | −1 … +1 | Mapped to 0…1 internally |
+| 2 | Throttle | −1 … +1 | Deadzone applied |
 | 5 | Twist (Yaw) | −1 … +1 | Inverted in code |
 | 7 | Rocker | −1 … +1 | Deadzone applied, inverted |
 | 9 | Hat (POV) | −1 … +1 | Encoded: `round((v+1)·3.5)` → 0–7 = directions, 8 = neutral |
@@ -207,7 +210,7 @@ Between the two stick units, centered at X = 0, on the pedestal surface.
 |---|---|---|---|
 | 0 | triggerBody | Stick | Trigger (back, index finger) |
 | 1 | btn1 | Stick | Center top button |
-| 2 | btn2 | — | Placeholder (null, unused) |
+| 2 | btn2 | Stick grip | Side button near trigger (red, on hemisphere) |
 | 3 | btn3 | Stick | Right top button |
 | 4 | tBtn4 | Throttle (+X) | Thumb column, top |
 | 5 | tBtn5 | Throttle (+X) | Thumb column, middle |
@@ -227,15 +230,12 @@ Between the two stick units, centered at X = 0, on the pedestal surface.
 
 | Variable | Hex | Usage |
 |---|---|---|
-| matBase | `#1a1a1a` | Pedestal plate, dome bases |
-| matHousing | `#222222` | Grip cap, structural housings |
-| matShaft | `#2a2a2a` | Shaft, trigger guard |
-| matGrip | `#151515` | Grip surfaces, throttle handle |
-| matRubber | `#111111` | Bellows, finger grooves |
-| matTrigger | `#dd3300` | Trigger body (red) |
-| matThrottle | `#1a1a1a` | Throttle-specific parts |
-| matBtn | `#444444` | All buttons (off state) |
-| matBtnOn | `#00ff44` | Buttons (pressed, green glow, emissive) |
-| matXbox | `#0066cc` | LED toggle (off, blue) – unused |
-| matXboxOn | `#00aaff` | LED toggle (on, blue glow) – unused |
-| matHat | `#555555` | Hat switch base |
+| matBase | `#3a3a4a` | Pedestal plate, dome bases |
+| matHousing | `#4a4a5a` | Grip hemisphere, cap disc, structural housings |
+| matShaft | `#555566` | Shaft, trigger guard |
+| matGrip | `#3a3a4a` | Grip cylinder surfaces |
+| matRubber | `#2a2a3a` | Bellows |
+| matTrigger | `#ff4422` | Trigger body, hat knob (red) |
+| matBtn | `#6666aa` | All buttons (off state) |
+| matBtnOn | `#44ff66` | Buttons (pressed, green glow, emissive) |
+| matHat | `#7777aa` | Hat switch base |
