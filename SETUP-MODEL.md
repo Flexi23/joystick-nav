@@ -12,38 +12,61 @@ Three.js right-handed coordinate system:
 - **+Z** = toward the user / camera (front)
 - **−Z** = away from the user (back)
 
-The model is centered at world origin. A debug `AxesHelper` (0.1 length) is placed at `(0, 1, 0)` for orientation.
+The model is centered at world origin.
+
+## Unit Convention
+
+All geometry dimensions in the code are specified in **centimeters** and converted to meters via:
+
+```js
+const S = 0.01; // cm → m
+```
+
+This document lists raw cm values as they appear in the code. Multiply by `S` to get meter-space values used by Three.js.
 
 ## Model Constants
 
-All layout dimensions are derived from shared constants defined in the `Model Constants` region:
+| Constant | Value (cm) | Description |
+|---|---|---|
+| `S` | 0.01 | cm → m conversion factor |
+| `DOME_RADIUS` | 15 | Sphere radius for dome caps |
+| `DOME_THETA` | π/5 (36°) | Polar angle of dome cap |
+| `DOME_FOOT_R` | `15 · sin(π/5)` ≈ 8.82 | Base ring radius of dome cap |
+| `DOME_CAP_H` | `15 · (1 − cos(π/5))` ≈ 2.87 | Cap height above base ring |
+| `PLATE_THICKNESS` | 0.5 | Pedestal plate extrusion depth |
+| `SHAFT_R_TOP` | 0.85 | Shaft top radius |
+| `SHAFT_R_BOT` | 1.20 | Shaft bottom radius |
+| `BELLOWS_R_TOP` | 1.60 | Bellows top radius |
+| `BELLOWS_R_BOT` | 2.70 | Bellows bottom radius |
+| `THROTTLE_W` | 8.5 | Throttle handle width |
+| `THROTTLE_H` | 5.5 | Throttle handle height |
+| `THROTTLE_D` | 2.4 | Throttle handle depth |
+| `BTN_R` | 0.5 | Button radius (all buttons) |
+| `BTN_H` | 0.25 | Button cylinder height |
+| `BTN_SEGS` | 10 | Button cylinder segments |
+
+### Animation Constants
 
 | Constant | Value | Description |
 |---|---|---|
-| `DOME_RADIUS` | 3.5 | Sphere radius – canonical size parameter for domes |
-| `DOME_THETA` | π/5 (36°) | Polar angle of dome cap |
-| `DOME_FOOT_R` | `DOME_RADIUS · sin(DOME_THETA)` ≈ 2.06 | Base ring radius of dome cap |
-| `DOME_CAP_H` | `DOME_RADIUS · (1 − cos(DOME_THETA))` ≈ 0.67 | Cap height above base ring |
-| `DOME_X` | = `DOME_FOOT_R` ≈ 2.06 | X offset so domes touch tangentially at center |
-| `PLATE_THICKNESS` | 0.2 | Pedestal plate extrusion depth |
-| `BTN_R` | 0.1 | Standard button radius |
-| `BTN_R_SM` | 0.09 | Small button radius |
-| `BTN_H` | 0.06 | Button cylinder height |
-| `BTN_SEGS` | 10 | Button cylinder segments |
-| `SHAFT_R_TOP` | 0.2 | Shaft top radius |
-| `SHAFT_R_BOT` | 0.28 | Shaft bottom radius |
-| `BELLOWS_R_TOP` | 0.4 | Bellows top radius |
-| `BELLOWS_R_BOT` | 0.65 | Bellows bottom radius |
+| `STICK_MAX_ANGLE` | π/6 (30°) | Max pitch/roll tilt |
+| `TWIST_MAX_ANGLE` | π/4 (45°) | Max yaw twist |
+| `THROTTLE_TILT_ANGLE` | π/6 (30°) | Max throttle lever tilt |
+| `ROCKER_MAX_ANGLE` | π/24 (7.5°) | Max rocker tilt |
+| `DEADZONE` | 0.05 | Axis deadzone threshold |
+| `SMOOTH` | 0.12 | Lerp factor for smooth interpolation |
 
 ### Derived Layout Values
 
-| Expression | ≈ Value | Description |
+| Expression | ≈ Value (cm) | Description |
 |---|---|---|
-| `DOME_X + DOME_FOOT_R` | ≈ 4.12 | `plateHalfLen` – half-length of stadium pedestal |
-| `DOME_FOOT_R` | ≈ 2.06 | `plateHalfZ` – half-width of stadium pedestal |
-| `PLATE_THICKNESS + BTN_H / 2` | 0.23 | `centerBtnY` / `triBtnY` – button Y on pedestal surface |
-| `DOME_FOOT_R - BTN_R` | ≈ 1.96 | `centerBtnZ` – btn10/11 Z, inside front edge |
-| `DOME_RADIUS / 2 - BTN_R / 2` | ≈ 1.70 | `triBtnZ` – triangle buttons Z position |
+| `2 · DOME_FOOT_R` | ≈ 17.64 | `plateHalfLen` – half-length of stadium pedestal |
+| `DOME_FOOT_R` | ≈ 8.82 | `plateHalfZ` – half-width of stadium pedestal |
+| `PLATE_THICKNESS + DOME_CAP_H · 0.4` | ≈ 1.65 | `centerBtnY` – button pair Y on dome slope |
+| `DOME_FOOT_R · 0.9 − BTN_R` | ≈ 7.44 | `centerBtnZ` – btn10/11 Z position |
+| `DOME_RADIUS / 2 − BTN_R / 2` | ≈ 7.25 | `triBtnZ` – triangle buttons Z position |
+| `THROTTLE_W / 2` | 4.25 | `sideX` – thumb button column X |
+| `−THROTTLE_D / 2` | −1.2 | `backZ` – back-face button Z |
 
 ## Physical Components
 
@@ -51,94 +74,100 @@ All layout dimensions are derived from shared constants defined in the `Model Co
 
 Stadium-shaped plate connecting both units (rectangle with semicircular ends).
 
-- Geometry: `ExtrudeGeometry(stadiumShape, depth: PLATE_THICKNESS)`
+- Geometry: `ExtrudeGeometry(stadiumShape, extrudePath)` along Y axis
 - Shape: `plateHalfLen` × `plateHalfZ` with semicircle arcs at ±X ends
 - The domes sit tangentially at center (touching at X = 0)
-- Top surface at Y = `PLATE_THICKNESS`
+- Top surface at Y = `PLATE_THICKNESS` (0.5 cm)
 
 ### Dome Bases
 
 Both the joystick and throttle unit sit on dome-shaped bases (sphere caps).
 
 - Shape: `SphereGeometry(DOME_RADIUS, 24, 14, 0, 2π, 0, DOME_THETA)`
-- Cap height: `DOME_RADIUS · (1 − cos(DOME_THETA))` ≈ 0.67
+- Cap height: ≈ 2.87 cm
 - Positioned so the base ring sits at Y = 0 of the group (dome shifted by `−DOME_RADIUS + DOME_CAP_H`)
-- `makeDome(radius, parent, pos)` helper creates group + dome mesh
+- `makeDome(radius, pos)` helper creates group + dome mesh + adds to scene
 
 ## Joystick Unit (right hand)
 
-Group position on pedestal: `(DOME_X, PLATE_THICKNESS, 0)` ≈ `(2.06, 0.2, 0)`
+Group variable: `stickDome`
+Position on pedestal: `(DOME_FOOT_R, PLATE_THICKNESS, 0)` ≈ `(8.82, 0.5, 0)` cm
 
 ### Scene Graph Hierarchy
 
+All Y values are in cm (code multiplies by `S`).
+
 ```
-stickUnit (dome group @ +DOME_X, PLATE_THICKNESS, 0)
- ├─ dome (sphere cap, r=DOME_RADIUS)
- ├─ gimbalPivot (Group, y=1.05) ← animated: rotation.x (pitch), rotation.z (roll)
- │   └─ twistPivot (Group) ← animated: rotation.y (yaw)
- │       ├─ bellows (rubber cylinder, BELLOWS_R_TOP→BELLOWS_R_BOT)
- │       ├─ shaft (tapered cylinder, SHAFT_R_TOP→SHAFT_R_BOT)
- │       └─ gripGroup (Group, y=12.77*S)
- │           ├─ gripLower (cylinder, palm)
- │           ├─ gripUpper (cylinder, top sloped 45° to match hemisphere)
- │           ├─ capTilt (Group, y=6.17*S, rot.x=π/4) ─ tilted 45° away from camera
- │           │   ├─ gripHemi (hemisphere, r=1.79*S, dome down)
- │           │   ├─ capDisc (circle, flat top surface)
- │           │   ├─ hatGroup (Group, x=−1.19*S, y=0.5*S)
- │           │   │   ├─ hat base (cylinder)
- │           │   │   └─ hatKnob (sphere) ← animated: position.x/z from axis 9
- │           │   ├─ btn1 (cylinder, y=0.5*S, center) ← Button 1
- │           │   └─ btn3 (cylinder, x=+1.19*S, y=0.5*S) ← Button 3
- │           ├─ btn2 (cylinder, red, x=1.0*S, y=5.2*S, z=−1.5*S) ← Button 2, near trigger
- │           ├─ triggerPivot (Group, y=5.53*S, z=−1.49*S) ← animated: rotation.x on button 0
- │           │   ├─ triggerBody (box, red) ← Button 0
- │           │   └─ triggerGuard (torus arc)
+stickDome (dome group @ DOME_FOOT_R, PLATE_THICKNESS, 0)
+ ├─ dome (sphere cap, r=15)
+ └─ gimbalPivot (Group, y=DOME_CAP_H−1.28 ≈ 1.59) ← animated: rotation.x (pitch), rotation.z (roll)
+     └─ twistPivot (Group) ← animated: rotation.y (yaw)
+         ├─ bellows (rubber cylinder, 1.60→2.70, h=2.77, y=0.51)
+         ├─ shaft (tapered cylinder, 0.85→1.20, h=11.92, y=7.45)
+         ├─ lblStick (floating label, y=24.5)
+         └─ gripGroup (Group, y=12.77)
+             ├─ gripLower (cylinder, r=1.79→1.49, h=3.83)
+             ├─ gripUpper (cylinder, r=1.49→1.79, h=4.26, y=4.04, top face sloped 45°)
+             ├─ capTilt (Group, y=6.17, rot.x=π/4) ─ tilted 45° away from camera
+             │   ├─ gripHemi (hemisphere, r=1.79, rot.x=π → dome faces down)
+             │   ├─ capDisc (circle, r=1.79, flat top surface, y=0.002)
+             │   ├─ hatGroup (Group, x=−1.19, y=0.5)
+             │   │   ├─ hat base (cylinder, r=0.77, h=0.34)
+             │   │   └─ hatKnob (sphere, r=0.55, y=0.43) ← animated: position.x/z from axis 9
+             │   ├─ btn1 (cylinder, y=0.5, center) ← Button 1
+             │   └─ btn3 (cylinder, x=+1.19, y=0.5) ← Button 3
+             ├─ btn2 (cylinder, red emissive, x=1.0, y=5.2, z=−1.5, rot YXZ) ← Button 2, grip side near trigger
+             └─ triggerPivot (Group, y=5.53, z=−1.49) ← animated: rotation.x on button 0
+                 ├─ triggerBody (box, 0.85×2.34×0.77, red) ← Button 0
+                 └─ triggerGuard (torus arc, r=0.94, tube=0.13)
 ```
 
 ### Stick Controls
 
 | Control | Type | Axis/Button | Animation |
 |---|---|---|---|
-| Roll | Analog axis | Axis 0 | gimbalPivot.rotation.z, max ±π/6 |
-| Pitch | Analog axis | Axis 1 | gimbalPivot.rotation.x, max ±π/6 |
-| Yaw (Twist) | Analog axis | Axis 5 | twistPivot.rotation.y, max ±π/4 (inverted) |
-| Trigger | Button | Button 0 | triggerPivot.rotation.x = −0.35 |
-| Center top | Button | Button 1 | Material swap (green glow) |
-| Side near trigger | Button | Button 2 | Material swap (red → green glow) |
-| Right top | Button | Button 3 | Material swap (green glow) |
-| Hat switch | 8-way POV | Axis 9 | hatKnob position offset ±0.05 |
+| Roll | Analog axis | Axis 0 | `gimbalPivot.rotation.z = -smooth.roll * STICK_MAX_ANGLE` |
+| Pitch | Analog axis | Axis 1 | `gimbalPivot.rotation.x = smooth.pitch * STICK_MAX_ANGLE` |
+| Yaw (Twist) | Analog axis | Axis 5 | `twistPivot.rotation.y = smooth.yaw * TWIST_MAX_ANGLE` (axis inverted) |
+| Trigger | Button | Button 0 | `triggerPivot.rotation.x = −0.35` |
+| Center top | Button | Button 1 | Material swap → `matBtnOn` (green glow) |
+| Side grip | Button | Button 2 | Material swap (red emissive → `matBtnOn`) |
+| Right top | Button | Button 3 | Material swap → `matBtnOn` (green glow) |
+| Hat switch | 8-way POV | Axis 9 | `hatKnob` position offset ±0.21 cm |
 
-> Button 2 is a red button on the grip side, next to the trigger, on the hemisphere surface.
+> Button 2 is a red emissive button on the grip side (child of `gripGroup`, not `capTilt`), positioned near the trigger.
 
 ## Throttle Unit (left hand)
 
-Group position on pedestal: `(−DOME_X, PLATE_THICKNESS, 0)` ≈ `(−2.06, 0.2, 0)`
+Group variable: `throttleDome`
+Position on pedestal: `(−DOME_FOOT_R, PLATE_THICKNESS, 0)` ≈ `(−8.82, 0.5, 0)` cm
 
 ### Scene Graph Hierarchy
 
 ```
-throttleUnit (dome group @ −DOME_X, PLATE_THICKNESS, 0)
- ├─ dome (sphere cap, r=DOME_RADIUS)
- ├─ throttleBellows (rubber cylinder, BELLOWS_R_TOP→BELLOWS_R_BOT, y=0.12)
- ├─ throttleShaft (tapered cylinder, SHAFT_R_TOP→SHAFT_R_BOT, y=0.55)
- └─ throttlePivot (Group, y=0.95) ← animated: rotation.x (throttle tilt ±π/6)
-     ├─ throttleHandle (box, 2.2 × 1.2 × 0.4, y=0.9)
-     ├─ tBtn4 (cylinder, +X side, y=1.30) ← Button 4, rot.z=π/2
-     ├─ tBtn5 (cylinder, +X side, y=1.05) ← Button 5, rot.z=π/2
-     ├─ tBtn6 (cylinder, +X side, y=0.80) ← Button 6, rot.z=π/2
-     ├─ tBtn7 (cylinder, +X side, y=0.40) ← Button 7 (extra gap), rot.z=π/2
-     ├─ tBtn8 (cylinder, −Z face, x=0.7, y=1.30) ← Button 8, rot.x=π/2
-     ├─ tBtn9 (cylinder, −Z face, x=0.7, y=1.05) ← Button 9, rot.x=π/2
-     └─ rockerPivot (Group, x=−0.25, y=1.3, z=−0.24) ← animated: rotation.y from axis 7
-         └─ rockerSwitch (box, 1.2 × 0.2 × 0.1)
+throttleDome (dome group @ −DOME_FOOT_R, PLATE_THICKNESS, 0)
+ ├─ dome (sphere cap, r=15)
+ └─ throttlePivot (Group, y=DOME_CAP_H−1.28 ≈ 1.59) ← animated: rotation.x (throttle tilt ±π/6)
+     ├─ throttleBellows (rubber cylinder, 1.60→2.70, h=2.77, y=0.51)
+     ├─ throttleShaft (tapered cylinder, 0.85→1.20, h=2.6, y=3.2)
+     ├─ throttleHandle (RoundedBoxGeometry 8.5×5.5×2.4, corner=0.5, y=7.25)
+     ├─ tBtn4 (cylinder, x=4.25, y=8.75, rot.z=π/2) ← Button 4
+     ├─ tBtn5 (cylinder, x=4.25, y=7.55, rot.z=π/2) ← Button 5
+     ├─ tBtn6 (cylinder, x=4.25, y=6.35, rot.z=π/2) ← Button 6
+     ├─ tBtn7 (cylinder, x=4.25, y=5.35, rot.z=π/2) ← Button 7 (extra gap)
+     ├─ tBtn8 (cylinder, x=2.125, y=8.75, z=−1.2, rot.x=π/2) ← Button 8
+     ├─ tBtn9 (cylinder, x=2.125, y=7.55, z=−1.2, rot.x=π/2) ← Button 9
+     └─ rockerPivot (Group, x=−1.0625, y=8.75, z=−1.2) ← animated: rotation.y from axis 7
+         ├─ rockerSwitch (box, 4.675×0.85×0.43)
+         └─ lblThrottle (floating label)
 ```
 
 ### Throttle Controls
 
 | Control | Type | Axis/Button | Animation |
 |---|---|---|---|
-| Throttle lever | Analog axis | Axis 2 | throttlePivot.rotation.x, range ±π/6 |
-| Rocker switch | Analog axis | Axis 7 | rockerPivot.rotation.y, max ±π/24 (inverted) |
+| Throttle lever | Analog axis | Axis 2 | `throttlePivot.rotation.x = smooth.throttle * THROTTLE_TILT_ANGLE` (axis inverted) |
+| Rocker switch | Analog axis | Axis 7 | `rockerPivot.rotation.y = -smooth.rocker * ROCKER_MAX_ANGLE` |
 | Thumb top | Button | Button 4 | Material swap |
 | Thumb mid | Button | Button 5 | Material swap |
 | Thumb bottom | Button | Button 6 | Material swap |
@@ -161,37 +190,38 @@ throttleUnit (dome group @ −DOME_X, PLATE_THICKNESS, 0)
 
 ## Base Buttons (on pedestal)
 
-All base buttons sit on the pedestal surface at `Y = PLATE_THICKNESS + BTN_H / 2` ≈ 0.23.
+All base buttons use `btnSmGeo` (same `BTN_R` / `BTN_H` as `btnGeo`).
 
 ### Button Pair: btn10 + btn11
 
-In front of the right joystick dome, just inside the pedestal front edge.
+In front of the right joystick dome, on the dome slope.
 
-- Y = `PLATE_THICKNESS + BTN_H / 2` ≈ 0.23
-- X = `DOME_X ± 0.15` (centered on joystick dome)
-- Z = `DOME_FOOT_R − BTN_R` ≈ 1.96
+- Y = `PLATE_THICKNESS + DOME_CAP_H · 0.4` ≈ 1.65 cm
+- X = `DOME_FOOT_R ± 0.64` cm (centered on joystick dome)
+- Z = `DOME_FOOT_R · 0.9 − BTN_R` ≈ 7.44 cm
+- Tilted: `rotation.x = DOME_THETA / 2` to follow dome curvature
 
-| Button | Index | Position offset from center |
+| Button | Index | X Position (cm) |
 |---|---|---|
-| btn10 | 10 | X − 0.15 |
-| btn11 | 11 | X + 0.15 |
+| btn10 | 10 | DOME_FOOT_R − 0.64 ≈ 8.18 |
+| btn11 | 11 | DOME_FOOT_R + 0.64 ≈ 9.46 |
 
 ### LED Toggle (index 16)
 
-Firmware-handled only. Pressing it toggles the on-board LED. It does not generate a Gamepad API event and is **not added to the scene** (`btnXbox = null`).
+Firmware-handled only. Pressing it toggles the on-board LED. It does not generate a Gamepad API event. In `allButtons`, index 16 is `null` (not added to the scene).
 
 ### Button Group: Triangle
 
 Between the two stick units, centered at X = 0, on the pedestal surface.
 
-- Y = `PLATE_THICKNESS + BTN_H / 2` ≈ 0.23
-- Z = `DOME_RADIUS / 2 − BTN_R / 2` ≈ 1.70
+- Y = `PLATE_THICKNESS` = 0.5 cm
+- Z = `DOME_RADIUS / 2 − BTN_R / 2` ≈ 7.25 cm
 
-| Button | Index | Position |
+| Button | Index | X Position (cm) |
 |---|---|---|
-| btn14 | 14 | X = 0 (center) |
-| btn12 | 12 | X = −0.4 (left) |
-| btn13 | 13 | X = +0.4 (right) |
+| btn14 | 14 | 0 (center) |
+| btn12 | 12 | −1.70 (left) |
+| btn13 | 13 | +1.70 (right) |
 
 ## Complete Axis Index Table
 
@@ -199,43 +229,58 @@ Between the two stick units, centered at X = 0, on the pedestal surface.
 |---|---|---|---|
 | 0 | Stick X (Roll) | −1 … +1 | Deadzone applied |
 | 1 | Stick Y (Pitch) | −1 … +1 | Deadzone applied |
-| 2 | Throttle | −1 … +1 | Deadzone applied |
-| 5 | Twist (Yaw) | −1 … +1 | Inverted in code |
-| 7 | Rocker | −1 … +1 | Deadzone applied, inverted |
+| 2 | Throttle | −1 … +1 | Deadzone applied, inverted in code |
+| 5 | Twist (Yaw) | −1 … +1 | Deadzone applied, inverted in code |
+| 7 | Rocker | −1 … +1 | Deadzone applied |
 | 9 | Hat (POV) | −1 … +1 | Encoded: `round((v+1)·3.5)` → 0–7 = directions, 8 = neutral |
 
 ## Complete Button Index Table
 
 | Index | Variable | Location | Description |
 |---|---|---|---|
-| 0 | triggerBody | Stick | Trigger (back, index finger) |
-| 1 | btn1 | Stick | Center top button |
-| 2 | btn2 | Stick grip | Side button near trigger (red, on hemisphere) |
-| 3 | btn3 | Stick | Right top button |
-| 4 | tBtn4 | Throttle (+X) | Thumb column, top |
-| 5 | tBtn5 | Throttle (+X) | Thumb column, middle |
-| 6 | tBtn6 | Throttle (+X) | Thumb column, bottom |
-| 7 | tBtn7 | Throttle (+X) | Thumb column, lower (extra gap) |
-| 8 | tBtn8 | Throttle (−Z) | Back face, right of rocker, top |
-| 9 | tBtn9 | Throttle (−Z) | Back face, right of rocker, bottom |
-| 10 | btn10 | Base | Pair left, front of joystick dome |
-| 11 | btn11 | Base | Pair right, front of joystick dome |
-| 12 | btn12 | Base | Triangle left |
-| 13 | btn13 | Base | Triangle right |
-| 14 | btn14 | Base | Triangle center |
-| 15 | — | — | Unused |
-| 16 | btnXbox | — | LED toggle (firmware-only, not in scene) |
+| 0 | `triggerBody` | Stick | Trigger (back, index finger, red) |
+| 1 | `btn1` | Stick cap | Center top button (on tilted hemisphere) |
+| 2 | `btn2` | Stick grip | Side button near trigger (red emissive, on gripGroup) |
+| 3 | `btn3` | Stick cap | Right top button (on tilted hemisphere) |
+| 4 | `tBtn4` | Throttle (+X) | Thumb column, top |
+| 5 | `tBtn5` | Throttle (+X) | Thumb column, middle |
+| 6 | `tBtn6` | Throttle (+X) | Thumb column, bottom |
+| 7 | `tBtn7` | Throttle (+X) | Thumb column, lower (extra gap) |
+| 8 | `tBtn8` | Throttle (−Z) | Back face, right of rocker, top |
+| 9 | `tBtn9` | Throttle (−Z) | Back face, right of rocker, bottom |
+| 10 | `btn10` | Base | Pair left, front of joystick dome |
+| 11 | `btn11` | Base | Pair right, front of joystick dome |
+| 12 | `btn12` | Base | Triangle left |
+| 13 | `btn13` | Base | Triangle right |
+| 14 | `btn14` | Base | Triangle center |
+| 15 | — | — | Unused (`null` in `allButtons`) |
+| 16 | — | — | LED toggle (firmware-only, `null` in `allButtons`) |
 
 ## Materials
 
 | Variable | Hex | Usage |
 |---|---|---|
-| matBase | `#3a3a4a` | Pedestal plate, dome bases |
-| matHousing | `#4a4a5a` | Grip hemisphere, cap disc, structural housings |
-| matShaft | `#555566` | Shaft, trigger guard |
-| matGrip | `#3a3a4a` | Grip cylinder surfaces |
-| matRubber | `#2a2a3a` | Bellows |
-| matTrigger | `#ff4422` | Trigger body, hat knob (red) |
-| matBtn | `#6666aa` | All buttons (off state) |
-| matBtnOn | `#44ff66` | Buttons (pressed, green glow, emissive) |
-| matHat | `#7777aa` | Hat switch base |
+| `matBase` | `#3a3a4a` | Pedestal plate (declared but plate uses inline material) |
+| `matDome` | `#3a3a4a` | Dome caps |
+| `matHousing` | `#4a4a5a` | Grip hemisphere (`gripHemi`), cap disc (`capDisc`) |
+| `matShaft` | `#555566` | Shaft, trigger guard |
+| `matGrip` | `#3a3a4a` | Grip cylinders (`gripLower`, `gripUpper`), throttle handle |
+| `matRubber` | `#2a2a3a` | Bellows (both sticks) |
+| `matTrigger` | `#ff4422` | Trigger body, hat knob (red accent) |
+| `matBtn` | `#6666aa` | All buttons (off state), rocker switch |
+| `matBtnOn` | `#44ff66` | Buttons (pressed state, green glow, emissive: 0.5) |
+| `matHat` | `#7777aa` | Hat switch base |
+| `btn2` default | `#ff2200` | Button 2 custom material (red, emissive: 0.3) |
+
+## Keyboard Fallback
+
+Keyboard input drives the same state values, both when no gamepad is connected and alongside a connected gamepad:
+
+| Key | State property | Behavior |
+|---|---|---|
+| W / S | `state.pitch` | Lerp toward −1 / +1 (rate 0.15) |
+| A / D | `state.roll` | Lerp toward −1 / +1 (rate 0.15) |
+| Q / E | `state.yaw` | Lerp toward −1 / +1 (rate 0.15) |
+| R / F | `state.throttle` | Increment / decrement by 0.04 per frame |
+
+When keys are released without a gamepad connected, values decay (multiply by 0.92 each frame).

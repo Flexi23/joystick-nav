@@ -20,7 +20,7 @@ Built as a reference implementation for the [Thrustmaster T.Flight HOTAS One](ht
 | 🧊 **Procedural 3D Model** | No external assets — geometry built entirely in code |
 | ⚡ **Real-time Animation** | All axes and buttons animate the model live via Gamepad API |
 | 📊 **HUD Overlay** | Raw axis values, bar graphs, and button state indicators |
-| ⌨️ **Keyboard Fallback** | Full control with WASD + QE + RF — no joystick required |
+| ⌨️ **Keyboard Fallback** | WASD + QE + RF — works standalone or alongside gamepad |
 | 🏷️ **Floating Labels** | Live value readouts on stick and throttle |
 | 🔍 **Orbit Camera** | Inspect the model from any angle |
 | 🎨 **Outline Effect** | Toon-style outlines via Three.js `OutlineEffect` |
@@ -52,11 +52,11 @@ Built as a reference implementation for the [Thrustmaster T.Flight HOTAS One](ht
 | 7 | `tBtn7` | Throttle +X | Thumb column, lower (extra gap) |
 | 8 | `tBtn8` | Throttle −Z | Back face, right of rocker, top |
 | 9 | `tBtn9` | Throttle −Z | Back face, right of rocker, bottom |
-| 10 | `btn10` | Base | Left of LED toggle |
-| 11 | `btn11` | Base | Right of LED toggle |
-| 12 | `btn12` | Base | Triangle bottom-left |
-| 13 | `btn13` | Base | Triangle bottom-right |
-| 14 | `btn14` | Base | Triangle top |
+| 10 | `btn10` | Base | Pair left, front of joystick dome |
+| 11 | `btn11` | Base | Pair right, front of joystick dome |
+| 12 | `btn12` | Base | Triangle left |
+| 13 | `btn13` | Base | Triangle right |
+| 14 | `btn14` | Base | Triangle center |
 | 15 | — | — | (unused) |
 | 16 | — | Base | LED toggle (firmware-only, no API event) |
 
@@ -66,7 +66,9 @@ Built as a reference implementation for the [Thrustmaster T.Flight HOTAS One](ht
 
 Plug in the T.Flight HOTAS One and press any button — the browser detects it automatically. If multiple controllers are connected, the HOTAS is prioritized by name.
 
-### ⌨️ Without Joystick
+### ⌨️ Keyboard
+
+Keyboard input works both standalone and alongside a connected gamepad.
 
 | Key | Function |
 |---|---|
@@ -75,7 +77,7 @@ Plug in the T.Flight HOTAS One and press any button — the browser detects it a
 | `Q` / `E` | Yaw |
 | `R` / `F` | Throttle up / down |
 
-Mouse drag to orbit the camera.
+Click to toggle auto-rotate. Mouse drag to orbit the camera.
 
 ## Getting Started
 
@@ -95,6 +97,7 @@ joystick-nav/
 ├── index.html        # Main visualizer (single-file, self-contained)
 ├── SETUP-MODEL.md    # Machine-readable model & layout reference (for AI agents)
 ├── CHANGELOG.md      # Version history (Keep a Changelog)
+├── LICENSE           # CC BY-SA 4.0 full legal text
 └── README.md         # You are here
 ```
 

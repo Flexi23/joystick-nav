@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-02-22
+
+### Fixed
+- **Keyboard fallback** now works correctly — keys drive the model both standalone and alongside a connected gamepad (previously blocked when any gamepad was present)
+- **Gamepad disconnect detection** — `state.connected` resets each poll frame instead of staying sticky after first connection
+
+### Changed
+- **SETUP-MODEL.md rewritten** from scratch to match actual code — all constant values, scene graph hierarchies, positions, variable names, and derived values now correct (previously had wrong units, ghost variables like `DOME_X`/`BTN_R_SM`/`AxesHelper`, inverted throttle hierarchy, etc.)
+- **README.md** — keyboard section updated (works alongside gamepad), button descriptions corrected (btn10/11 "front of joystick dome", btn12–14 horizontal triangle layout), project structure includes LICENSE file, autoRotate toggle documented
+
 ## [0.4.1] - 2026-02-22
 
 ### Added

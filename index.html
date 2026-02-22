@@ -496,8 +496,8 @@ function pollGamepad() {
 	if (!gp) {
 		for (let i = 0; i < gps.length; i++) { if (gps[i]) { gp = gps[i]; break; } }
 	}
+	state.connected = !!gp;
 	if (!gp) return;
-	state.connected = true;
 	state.axes = Array.from(gp.axes);
 	state.buttons = Array.from(gp.buttons).map(b => b.pressed);
 	state.roll = applyDeadzone(gp.axes[AXIS_ROLL] || 0);
@@ -615,19 +615,26 @@ window.addEventListener('keyup', e => { keys[e.code] = false; });
 const _origPoll = pollGamepad;
 pollGamepad = function() {
 	_origPoll();
-	if (!state.connected) {
+	const anyKey = keys['KeyW'] || keys['KeyS'] || keys['KeyA'] || keys['KeyD']
+		|| keys['KeyQ'] || keys['KeyE'] || keys['KeyR'] || keys['KeyF'];
+	if (anyKey) {
 		if (keys['KeyW']) state.pitch = lerp(state.pitch, -1, 0.15);
-		if (keys['KeyS']) state.pitch = lerp(state.pitch, 1, 0.15);
+		else if (keys['KeyS']) state.pitch = lerp(state.pitch, 1, 0.15);
+		else if (!state.connected) state.pitch *= 0.92;
 		if (keys['KeyA']) state.roll = lerp(state.roll, -1, 0.15);
-		if (keys['KeyD']) state.roll = lerp(state.roll, 1, 0.15);
+		else if (keys['KeyD']) state.roll = lerp(state.roll, 1, 0.15);
+		else if (!state.connected) state.roll *= 0.92;
 		if (keys['KeyQ']) state.yaw = lerp(state.yaw, -1, 0.15);
-		if (keys['KeyE']) state.yaw = lerp(state.yaw, 1, 0.15);
+		else if (keys['KeyE']) state.yaw = lerp(state.yaw, 1, 0.15);
+		else if (!state.connected) state.yaw *= 0.92;
 		if (keys['KeyR']) state.throttle = Math.min(1, state.throttle + 0.04);
-		if (keys['KeyF']) state.throttle = Math.max(-1, state.throttle - 0.04);
-		if (!keys['KeyR'] && !keys['KeyF']) state.throttle *= 0.92;
-		if (!keys['KeyW'] && !keys['KeyS']) state.pitch *= 0.92;
-		if (!keys['KeyA'] && !keys['KeyD']) state.roll *= 0.92;
-		if (!keys['KeyQ'] && !keys['KeyE']) state.yaw *= 0.92;
+		else if (keys['KeyF']) state.throttle = Math.max(-1, state.throttle - 0.04);
+		else if (!state.connected) state.throttle *= 0.92;
+		hudStatus.textContent = '\u2328\uFE0F Keyboard (WASD + QE + RF)';
+		hudStatus.className = 'val';
+	} else if (!state.connected) {
+		state.pitch *= 0.92; state.roll *= 0.92;
+		state.yaw *= 0.92; state.throttle *= 0.92;
 		hudStatus.textContent = '\u2328\uFE0F Keyboard mode (WASD + QE + RF)';
 		hudStatus.className = 'val';
 	}
