@@ -1,0 +1,626 @@
+<html>
+<head>
+	<title>T.Flight HOTAS One | Gamepad API mapping</title>
+	<style>
+		* { margin: 0; padding: 0; box-sizing: border-box; }
+		body { background: #111; color: #ccc; font-family: monospace; overflow: hidden; }
+		canvas { display: block; }
+		#hud {
+			position: absolute; top: 12px; left: 12px;
+			background: rgba(0,0,0,0.75); padding: 12px 16px; border-radius: 6px;
+			font-size: 13px; line-height: 1.7; pointer-events: none; z-index: 10;
+			min-width: 280px;
+		}
+		#hud .label { color: #888; }
+		#hud .val { color: #0f0; font-weight: bold; }
+		#hud .warn { color: #f80; }
+		#hud h3 { color: #fff; margin-bottom: 4px; font-size: 15px; }
+		#hud .bar-wrap { display: inline-block; width: 100px; height: 8px; background: #333; border-radius: 4px; vertical-align: middle; margin-left: 6px; }
+		#hud .bar { height: 100%; background: #0f0; border-radius: 4px; transition: width 0.05s; }
+		#buttons-hud { margin-top: 6px; }
+		#buttons-hud span { display: inline-block; width: 18px; height: 18px; border-radius: 50%; background: #333; margin: 2px; text-align: center; line-height: 18px; font-size: 9px; color: #666; }
+		#buttons-hud span.on { background: #0f0; color: #000; }
+	</style>
+	<script type="importmap">
+	{
+		"imports": {
+			"three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+			"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+		}
+	}
+	</script>
+</head>
+<body>
+<div id="hud">
+	<h3>5DoF controller galore</h3>
+	<div id="status" class="warn">&#x23F3; Press a button on the joystick…</div>
+	<div id="axes"></div>
+	<div id="buttons-hud"></div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
+
+// 1 unit = 1 meter
+
+// ── Renderer ──
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.NoToneMapping;
+
+const outlineEffect = new OutlineEffect(renderer, {
+	defaultThickness: 0.004,
+	defaultColor: [0, 0, 0],
+	defaultAlpha: 1.0,
+	defaultKeepAlive: true,
+});
+document.body.appendChild(renderer.domElement);
+
+// ── Scene ──
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x88aacc);
+
+// ── Camera ──
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 200);
+
+// ── OrbitControls ──
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0.10, 0);      // model center height
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.enablePan = false;
+controls.maxPolarAngle = Math.PI / 2;  // don't go below ground
+controls.autoRotate = true;
+controls.autoRotateSpeed = 2.0;
+
+// Set camera AFTER controls.target, then call update
+camera.position.set(0, 0.4, 0.6);
+controls.update();
+
+// ── Lights ──
+scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+const dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
+dirLight.position.set(2, 5, 3);
+scene.add(dirLight);
+
+// ── Ground (y = 0) ──
+const ground = new THREE.Mesh(
+	new THREE.PlaneGeometry(400, 400),
+	new THREE.MeshStandardMaterial({ color: 0x667799 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = 0;
+scene.add(ground);
+
+const grid = new THREE.GridHelper(200, 2000, 0x5566aa, 0x445588);
+grid.position.y = 0.001;
+grid.material.transparent = true;
+grid.material.opacity = 0.4;
+scene.add(grid);
+
+// ── Pedestal Plate (converted from cm to m) ──
+// Original cm values: DOME_RADIUS=15, DOME_THETA=PI/5, DOME_FOOT_R≈8.82, PLATE_THICKNESS=0.5
+const S = 0.01; // cm → m
+const DOME_RADIUS = 15 * S;
+const DOME_THETA = Math.PI / 5;
+const DOME_FOOT_R = DOME_RADIUS * Math.sin(DOME_THETA);
+const DOME_CAP_H = DOME_RADIUS * (1 - Math.cos(DOME_THETA));
+const PLATE_THICKNESS = 0.5 * S;
+
+const SHAFT_R_TOP = 0.85 * S;
+const SHAFT_R_BOT = 1.20 * S;
+const BELLOWS_R_TOP = 1.60 * S;
+const BELLOWS_R_BOT = 2.70 * S;
+const THROTTLE_W = 8.5 * S;
+const THROTTLE_H = 5.5 * S;
+const THROTTLE_D = 2.4 * S;
+const BTN_R = 0.5 * S;
+const BTN_H = 0.25 * S;
+const BTN_SEGS = 10;
+
+const STICK_MAX_ANGLE = Math.PI / 6;
+const TWIST_MAX_ANGLE = Math.PI / 4;
+const THROTTLE_TILT_ANGLE = Math.PI / 6;
+const ROCKER_MAX_ANGLE = Math.PI / 24;
+const DEADZONE = 0.05;
+const AXIS_ROLL = 0, AXIS_PITCH = 1, AXIS_THROTTLE = 2, AXIS_YAW = 5, AXIS_ROCKER = 7, AXIS_HAT = 9;
+
+function applyDeadzone(v) { return Math.abs(v) < DEADZONE ? 0 : v; }
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+const matBase = new THREE.MeshStandardMaterial({ color: 0x3a3a4a });
+const matShaft = new THREE.MeshStandardMaterial({ color: 0x555566 });
+const matGrip = new THREE.MeshStandardMaterial({ color: 0x3a3a4a });
+const matRubber = new THREE.MeshStandardMaterial({ color: 0x2a2a3a });
+const matTrigger = new THREE.MeshStandardMaterial({ color: 0xff4422 });
+const matHousing = new THREE.MeshStandardMaterial({ color: 0x4a4a5a });
+const matBtn = new THREE.MeshStandardMaterial({ color: 0x6666aa });
+const matBtnOn = new THREE.MeshStandardMaterial({ color: 0x44ff66, emissive: 0x44ff66, emissiveIntensity: 0.5 });
+const matHat = new THREE.MeshStandardMaterial({ color: 0x7777aa });
+
+function makeButtonGeo(r, h, segs) {
+	const capH = h * 0.35;
+	const bodyH = h - capH * 2;
+	const body = new THREE.CylinderGeometry(r, r, bodyH, segs);
+	const topCap = new THREE.SphereGeometry(r, segs, 5, 0, Math.PI * 2, 0, Math.PI / 2);
+	topCap.scale(1, capH / r, 1);
+	topCap.translate(0, bodyH / 2, 0);
+	const botCap = new THREE.SphereGeometry(r, segs, 5, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
+	botCap.scale(1, capH / r, 1);
+	botCap.translate(0, -bodyH / 2, 0);
+	return mergeGeometries([body, topCap, botCap]);
+}
+const btnGeo = makeButtonGeo(BTN_R, BTN_H, BTN_SEGS);
+const btnSmGeo = makeButtonGeo(BTN_R, BTN_H, BTN_SEGS);
+
+const plateHalfLen = 2 * DOME_FOOT_R;
+const plateHalfZ = DOME_FOOT_R;
+const plateShape = new THREE.Shape();
+plateShape.moveTo(-plateHalfZ, -plateHalfLen + plateHalfZ);
+plateShape.lineTo(-plateHalfZ, plateHalfLen - plateHalfZ);
+plateShape.absarc(0, plateHalfLen - plateHalfZ, plateHalfZ, Math.PI, 0, true);
+plateShape.lineTo(plateHalfZ, -plateHalfLen + plateHalfZ);
+plateShape.absarc(0, -plateHalfLen + plateHalfZ, plateHalfZ, 0, Math.PI, true);
+
+const extrudePath = new THREE.LineCurve3(
+	new THREE.Vector3(0, 0, 0),
+	new THREE.Vector3(0, PLATE_THICKNESS, 0)
+);
+
+const pedestalPlate = new THREE.Mesh(
+	new THREE.ExtrudeGeometry(plateShape, { steps: 1, bevelEnabled: false, extrudePath }),
+	new THREE.MeshStandardMaterial({ color: 0x3a3a4a })
+);
+scene.add(pedestalPlate);
+
+// ── Domes ──
+const matDome = new THREE.MeshStandardMaterial({ color: 0x3a3a4a });
+
+function makeDome(radius, pos) {
+	const capHeight = radius * (1 - Math.cos(DOME_THETA));
+	const group = new THREE.Group();
+	group.position.copy(pos);
+	const dome = new THREE.Mesh(
+		new THREE.SphereGeometry(radius, 24, 14, 0, Math.PI * 2, 0, DOME_THETA),
+		matDome
+	);
+	dome.position.y += -radius + capHeight;
+	group.add(dome);
+	scene.add(group);
+	return group;
+}
+
+const stickDome = makeDome(DOME_RADIUS, new THREE.Vector3(DOME_FOOT_R, PLATE_THICKNESS, 0));
+const throttleDome = makeDome(DOME_RADIUS, new THREE.Vector3(-DOME_FOOT_R, PLATE_THICKNESS, 0));
+
+// ── Joystick Stick (right hand) ──
+const gimbalPivot = new THREE.Group();
+gimbalPivot.position.set(0, DOME_CAP_H - 1.28 * S, 0);
+stickDome.add(gimbalPivot);
+
+const twistPivot = new THREE.Group();
+gimbalPivot.add(twistPivot);
+
+const bellows = new THREE.Mesh(
+	new THREE.CylinderGeometry(BELLOWS_R_TOP, BELLOWS_R_BOT, 2.77 * S, 16, 4),
+	matRubber
+);
+bellows.position.y = 0.51 * S;
+twistPivot.add(bellows);
+
+const shaft = new THREE.Mesh(
+	new THREE.CylinderGeometry(SHAFT_R_TOP, SHAFT_R_BOT, 11.92 * S, 14),
+	matShaft
+);
+shaft.position.y = 7.45 * S;
+twistPivot.add(shaft);
+
+const gripGroup = new THREE.Group();
+gripGroup.position.y = 12.77 * S;
+twistPivot.add(gripGroup);
+
+gripGroup.add(new THREE.Mesh(
+	new THREE.CylinderGeometry(1.79 * S, 1.49 * S, 3.83 * S, 12), matGrip
+));
+
+const gripUpperGeo = new THREE.CylinderGeometry(1.49 * S, 1.79 * S, 4.26 * S, 12);
+{ // slope top face to match 45° hemisphere tilt
+	const pos = gripUpperGeo.attributes.position;
+	const halfH = 4.26 * S / 2;
+	for (let i = 0; i < pos.count; i++) {
+		const y = pos.getY(i);
+		if (y > halfH - 0.001 * S) { // top ring + center
+			pos.setY(i, y - pos.getZ(i) * Math.tan(Math.PI / 4));
+		}
+	}
+	pos.needsUpdate = true;
+	gripUpperGeo.computeVertexNormals();
+}
+const gripUpper = new THREE.Mesh(gripUpperGeo, matGrip);
+gripUpper.position.y = 4.04 * S;
+gripGroup.add(gripUpper);
+
+// ── Tilted cap with hemisphere + hat & buttons ──
+const capTilt = new THREE.Group();
+capTilt.position.y = 6.17 * S; // top of gripUpper
+capTilt.rotation.x = Math.PI / 4; // 45° away from camera
+gripGroup.add(capTilt);
+
+const gripHemi = new THREE.Mesh(
+	new THREE.SphereGeometry(1.79 * S, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+	matHousing
+);
+gripHemi.rotation.x = Math.PI; // dome faces down, flat side up
+capTilt.add(gripHemi);
+
+const capDisc = new THREE.Mesh(
+	new THREE.CircleGeometry(1.79 * S, 16),
+	matHousing
+);
+capDisc.rotation.x = -Math.PI / 2;
+capDisc.position.y = 0.002 * S; // nudge above hemisphere base
+capTilt.add(capDisc);
+
+const triggerPivot = new THREE.Group();
+triggerPivot.position.set(0, 5.53 * S, -1.49 * S);
+gripGroup.add(triggerPivot);
+
+const triggerBody = new THREE.Mesh(
+	new THREE.BoxGeometry(0.85 * S, 2.34 * S, 0.77 * S), matTrigger
+);
+triggerBody.position.set(0, -0.64 * S, -0.21 * S);
+triggerBody.rotation.x = -0.25;
+triggerPivot.add(triggerBody);
+
+const triggerGuard = new THREE.Mesh(
+	new THREE.TorusGeometry(0.94 * S, 0.13 * S, 8, 12, Math.PI), matShaft
+);
+triggerGuard.rotation.z = Math.PI;
+triggerGuard.position.set(0, -1.28 * S, -0.34 * S);
+triggerPivot.add(triggerGuard);
+
+const hatGroup = new THREE.Group();
+hatGroup.position.set(-1.19 * S, 0.5 * S, 0);
+capTilt.add(hatGroup);
+hatGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.77 * S, 0.77 * S, 0.34 * S, 8), matHat));
+const hatKnob = new THREE.Mesh(new THREE.SphereGeometry(0.55 * S, 12, 8), matTrigger);
+hatKnob.position.y = 0.43 * S;
+hatGroup.add(hatKnob);
+
+const btn1 = new THREE.Mesh(btnGeo, matBtn);
+btn1.position.set(0, 0.5 * S, 0);
+capTilt.add(btn1);
+
+const btn2 = new THREE.Mesh(btnGeo,
+	new THREE.MeshStandardMaterial({ color: 0xff2200, emissive: 0xff2200, emissiveIntensity: 0.3 })
+);
+btn2.position.set(1.0 * S, 5.2 * S, -1.5 * S);
+btn2.rotation.order = 'YXZ';
+btn2.rotation.set(Math.PI / 2, -Math.PI / 4, 0);
+btn2._defaultMat = btn2.material;
+gripGroup.add(btn2);
+
+const btn3 = new THREE.Mesh(btnGeo, matBtn);
+btn3.position.set(1.19 * S, 0.5 * S, 0);
+capTilt.add(btn3);
+
+// ── Throttle Stick (left hand) ──
+const throttlePivot = new THREE.Group();
+throttlePivot.position.set(0, DOME_CAP_H - 1.28 * S, 0);
+throttleDome.add(throttlePivot);
+
+const throttleBellows = new THREE.Mesh(
+	new THREE.CylinderGeometry(BELLOWS_R_TOP, BELLOWS_R_BOT, 2.77 * S, 16, 4), matRubber
+);
+throttleBellows.position.y = 0.51 * S;
+throttlePivot.add(throttleBellows);
+
+const throttleShaft = new THREE.Mesh(
+	new THREE.CylinderGeometry(SHAFT_R_TOP, SHAFT_R_BOT, 2.6 * S, 14), matShaft
+);
+throttleShaft.position.y = 3.2 * S;
+throttlePivot.add(throttleShaft);
+
+const handleY = 7.25 * S;
+const throttleHandle = new THREE.Mesh(
+	new RoundedBoxGeometry(THROTTLE_W, THROTTLE_H, THROTTLE_D, 3, 0.5 * S), matGrip
+);
+throttleHandle.position.set(0, handleY, 0);
+throttlePivot.add(throttleHandle);
+
+const sideX = THROTTLE_W / 2;
+const backZ = -THROTTLE_D / 2;
+
+const tBtn4 = new THREE.Mesh(btnGeo, matBtn);
+tBtn4.position.set(sideX, handleY + 1.5 * S, 0);
+tBtn4.rotation.z = Math.PI / 2;
+throttlePivot.add(tBtn4);
+
+const tBtn5 = new THREE.Mesh(btnGeo, matBtn);
+tBtn5.position.set(sideX, handleY + 0.3 * S, 0);
+tBtn5.rotation.z = Math.PI / 2;
+throttlePivot.add(tBtn5);
+
+const tBtn6 = new THREE.Mesh(btnGeo, matBtn);
+tBtn6.position.set(sideX, handleY - 0.9 * S, 0);
+tBtn6.rotation.z = Math.PI / 2;
+throttlePivot.add(tBtn6);
+
+const tBtn7 = new THREE.Mesh(btnSmGeo, matBtn);
+tBtn7.position.set(sideX, handleY - 1.9 * S, 0);
+tBtn7.rotation.z = Math.PI / 2;
+throttlePivot.add(tBtn7);
+
+const tBtn8 = new THREE.Mesh(btnGeo, matBtn);
+tBtn8.position.set(THROTTLE_W / 4, handleY + 1.5 * S, backZ);
+tBtn8.rotation.x = Math.PI / 2;
+throttlePivot.add(tBtn8);
+
+const tBtn9 = new THREE.Mesh(btnGeo, matBtn);
+tBtn9.position.set(THROTTLE_W / 4, handleY + 0.3 * S, backZ);
+tBtn9.rotation.x = Math.PI / 2;
+throttlePivot.add(tBtn9);
+
+const rockerPivot = new THREE.Group();
+rockerPivot.position.set(-THROTTLE_W / 8, handleY + 1.5 * S, -THROTTLE_D / 2);
+throttlePivot.add(rockerPivot);
+
+const rockerSwitch = new THREE.Mesh(
+	new THREE.BoxGeometry(THROTTLE_W * 0.55, 0.85 * S, 0.43 * S), matBtn
+);
+rockerPivot.add(rockerSwitch);
+
+// ── Center Buttons ──
+const centerBtnY = PLATE_THICKNESS + DOME_CAP_H * 0.4;
+const centerBtnX = DOME_FOOT_R;
+const centerBtnZ = DOME_FOOT_R * 0.9 - BTN_R;
+
+const btn10 = new THREE.Mesh(btnSmGeo, matBtn);
+btn10.position.set(centerBtnX - 0.64 * S, centerBtnY, centerBtnZ);
+btn10.rotation.x = DOME_THETA / 2;
+scene.add(btn10);
+
+const btn11 = new THREE.Mesh(btnSmGeo, matBtn);
+btn11.position.set(centerBtnX + 0.64 * S, centerBtnY, centerBtnZ);
+btn11.rotation.x = DOME_THETA / 2;
+scene.add(btn11);
+
+const triBtnY = PLATE_THICKNESS;
+const triBtnZ = DOME_RADIUS / 2 - BTN_R / 2;
+
+const btn14 = new THREE.Mesh(btnSmGeo, matBtn);
+btn14.position.set(0, triBtnY, triBtnZ);
+scene.add(btn14);
+
+const btn12 = new THREE.Mesh(btnSmGeo, matBtn);
+btn12.position.set(-1.70 * S, triBtnY, triBtnZ);
+scene.add(btn12);
+
+const btn13 = new THREE.Mesh(btnSmGeo, matBtn);
+btn13.position.set(1.70 * S, triBtnY, triBtnZ);
+scene.add(btn13);
+
+// ── Labels ──
+const lblStick = (function () {
+	const canvas = document.createElement('canvas');
+	canvas.width = 256; canvas.height = 128;
+	const ctx = canvas.getContext('2d');
+	ctx.font = 'bold 22px monospace';
+	ctx.textAlign = 'center';
+	const tex = new THREE.CanvasTexture(canvas);
+	const matFace = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthTest: false });
+	const matEdge = new THREE.MeshBasicMaterial({ color: 0xff6644, transparent: true, opacity: 0.5, depthTest: false });
+	const mesh = new THREE.Mesh(
+		new THREE.BoxGeometry(9.4 * S, 4.8 * S, 0.18 * S),
+		[matEdge, matEdge, matEdge, matEdge, matFace, matFace]
+	);
+	mesh.renderOrder = 999;
+	let lastKey = '';
+	mesh.updateLabel = function (pitch, roll, yaw) {
+		const key = pitch.toFixed(2) + '|' + roll.toFixed(2) + '|' + yaw.toFixed(2);
+		if (key === lastKey) return;
+		lastKey = key;
+		ctx.clearRect(0, 0, 256, 128);
+		ctx.fillStyle = '#ff6644';
+		ctx.fillText('ROLL  ' + roll.toFixed(2), 128, 34);
+		ctx.fillStyle = '#4488ff';
+		ctx.fillText('PITCH ' + pitch.toFixed(2), 128, 68);
+		ctx.fillStyle = '#ffcc00';
+		ctx.fillText('YAW   ' + yaw.toFixed(2), 128, 102);
+		tex.needsUpdate = true;
+	};
+	mesh.updateLabel(0, 0, 0);
+	return mesh;
+})();
+lblStick.position.set(0, 24.5 * S, 0);
+twistPivot.add(lblStick);
+
+const lblThrottle = (function () {
+	const canvas = document.createElement('canvas');
+	canvas.width = 256; canvas.height = 96;
+	const ctx = canvas.getContext('2d');
+	ctx.font = 'bold 22px monospace';
+	ctx.textAlign = 'center';
+	const tex = new THREE.CanvasTexture(canvas);
+	const matFace = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthTest: false });
+	const matEdge = new THREE.MeshBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.5, depthTest: false });
+	const mesh = new THREE.Mesh(
+		new THREE.BoxGeometry(9.4 * S, 3.6 * S, 0.18 * S),
+		[matEdge, matEdge, matEdge, matEdge, matFace, matFace]
+	);
+	mesh.renderOrder = 999;
+	let lastKey = '';
+	mesh.updateLabel = function (throttle, rocker) {
+		const key = throttle.toFixed(2) + '|' + rocker.toFixed(2);
+		if (key === lastKey) return;
+		lastKey = key;
+		ctx.clearRect(0, 0, 256, 96);
+		ctx.fillStyle = '#cc66ff';
+		ctx.fillText('ROCKER ' + rocker.toFixed(2), 128, 34);
+		ctx.fillStyle = '#00ff88';
+		ctx.fillText('THROTTLE ' + throttle.toFixed(2), 128, 72);
+		tex.needsUpdate = true;
+	};
+	mesh.updateLabel(0, 0);
+	return mesh;
+})();
+lblThrottle.position.set(THROTTLE_W / 8, (handleY + THROTTLE_H / 2 + 4 * S) - (handleY + 1.5 * S), THROTTLE_D / 2);
+rockerPivot.add(lblThrottle);
+
+// ── Button Map ──
+const allButtons = [
+	triggerBody, btn1, btn2, btn3,
+	tBtn4, tBtn5, tBtn6, tBtn7, tBtn8, tBtn9,
+	btn10, btn11, btn12, btn13, btn14,
+	null, null,
+];
+
+// ══════════════════════════════════════════════════════════
+// ── Gamepad State ──
+const state = {
+	connected: false, axes: [], buttons: [],
+	pitch: 0, roll: 0, yaw: 0, throttle: 0, rocker: 0,
+};
+
+function pollGamepad() {
+	const gps = navigator.getGamepads();
+	let gp = null;
+	for (let i = 0; i < gps.length; i++) {
+		if (gps[i] && gps[i].id.toLowerCase().includes('hotas')) { gp = gps[i]; break; }
+	}
+	if (!gp) {
+		for (let i = 0; i < gps.length; i++) { if (gps[i]) { gp = gps[i]; break; } }
+	}
+	if (!gp) return;
+	state.connected = true;
+	state.axes = Array.from(gp.axes);
+	state.buttons = Array.from(gp.buttons).map(b => b.pressed);
+	state.roll = applyDeadzone(gp.axes[AXIS_ROLL] || 0);
+	state.pitch = applyDeadzone(gp.axes[AXIS_PITCH] || 0);
+	state.yaw = -applyDeadzone(gp.axes[AXIS_YAW] || 0);
+	state.throttle = (1 + (gp.axes[AXIS_THROTTLE] || 0)) / 2;
+	state.rocker = applyDeadzone(gp.axes[AXIS_ROCKER] || 0);
+}
+
+// ── HUD ──
+const hudStatus = document.getElementById('status');
+const hudAxes = document.getElementById('axes');
+const hudBtns = document.getElementById('buttons-hud');
+
+function updateHUD() {
+	if (!state.connected) return;
+	let html = '';
+	state.axes.forEach((v, i) => {
+		const pct = ((v + 1) / 2 * 100).toFixed(0);
+		html += `<div><span class="label">Axis ${i}:</span> <span class="val">${v.toFixed(3)}</span>`;
+		html += `<span class="bar-wrap"><span class="bar" style="width:${pct}%"></span></span></div>`;
+	});
+	hudAxes.innerHTML = html;
+	let bhtml = '';
+	state.buttons.forEach((b, i) => {
+		bhtml += `<span class="${b ? 'on' : ''}">${i}</span>`;
+	});
+	hudBtns.innerHTML = bhtml;
+}
+
+window.addEventListener('gamepadconnected', e => {
+	hudStatus.textContent = `\u2705 ${e.gamepad.id}`;
+	hudStatus.className = 'val';
+	state.connected = true;
+});
+window.addEventListener('gamepaddisconnected', () => {
+	hudStatus.textContent = '\u23F3 Joystick disconnected\u2026';
+	hudStatus.className = 'warn';
+	state.connected = false;
+});
+
+// ── Animation Loop ──
+const smooth = { pitch: 0, roll: 0, yaw: 0, throttle: 0, rocker: 0 };
+const SMOOTH = 0.12;
+
+function animate() {
+	requestAnimationFrame(animate);
+
+	pollGamepad();
+
+	smooth.pitch = lerp(smooth.pitch, state.pitch, SMOOTH);
+	smooth.roll = lerp(smooth.roll, state.roll, SMOOTH);
+	smooth.yaw = lerp(smooth.yaw, state.yaw, SMOOTH);
+	smooth.throttle = lerp(smooth.throttle, state.throttle, SMOOTH);
+	smooth.rocker = lerp(smooth.rocker, state.rocker, SMOOTH);
+
+	gimbalPivot.rotation.x = smooth.pitch * STICK_MAX_ANGLE;
+	gimbalPivot.rotation.z = -smooth.roll * STICK_MAX_ANGLE;
+	twistPivot.rotation.y = smooth.yaw * TWIST_MAX_ANGLE;
+	throttlePivot.rotation.x = lerp(-THROTTLE_TILT_ANGLE, THROTTLE_TILT_ANGLE, smooth.throttle);
+	rockerPivot.rotation.y = -smooth.rocker * ROCKER_MAX_ANGLE;
+	triggerPivot.rotation.x = state.buttons[0] ? -0.35 : 0;
+
+	hatKnob.position.x = 0;
+	hatKnob.position.z = 0;
+	if (state.axes.length > AXIS_HAT) {
+		const idx = Math.round((state.axes[AXIS_HAT] + 1) * 3.5);
+		if (idx < 8) {
+			const angle = idx * Math.PI / 4;
+			hatKnob.position.x = Math.sin(angle) * 0.21 * S;
+			hatKnob.position.z = -Math.cos(angle) * 0.21 * S;
+		}
+	}
+
+	allButtons.forEach((btn, i) => {
+		if (!btn || i >= state.buttons.length) return;
+		if (btn === triggerBody || btn === btn2) {
+			btn.material = state.buttons[i] ? matBtnOn : btn._defaultMat || matTrigger;
+		} else {
+			btn.material = state.buttons[i] ? matBtnOn : matBtn;
+		}
+	});
+
+	lblStick.updateLabel(smooth.pitch, smooth.roll, smooth.yaw);
+	lblThrottle.updateLabel(smooth.throttle, smooth.rocker);
+
+	updateHUD();
+	controls.update();
+	outlineEffect.render(scene, camera);
+}
+animate();
+
+// ── Resize ──
+window.addEventListener('resize', () => {
+	camera.aspect = innerWidth / innerHeight;
+	camera.updateProjectionMatrix();
+	outlineEffect.setSize(innerWidth, innerHeight);
+});
+
+// ── Keyboard Fallback ──
+const keys = {};
+window.addEventListener('keydown', e => { keys[e.code] = true; });
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+const _origPoll = pollGamepad;
+pollGamepad = function() {
+	_origPoll();
+	if (!state.connected) {
+		if (keys['KeyW']) state.pitch = lerp(state.pitch, -1, 0.15);
+		if (keys['KeyS']) state.pitch = lerp(state.pitch, 1, 0.15);
+		if (keys['KeyA']) state.roll = lerp(state.roll, -1, 0.15);
+		if (keys['KeyD']) state.roll = lerp(state.roll, 1, 0.15);
+		if (keys['KeyQ']) state.yaw = lerp(state.yaw, -1, 0.15);
+		if (keys['KeyE']) state.yaw = lerp(state.yaw, 1, 0.15);
+		if (keys['KeyR']) state.throttle = Math.min(1, state.throttle + 0.02);
+		if (keys['KeyF']) state.throttle = Math.max(0, state.throttle - 0.02);
+		if (!keys['KeyW'] && !keys['KeyS']) state.pitch *= 0.92;
+		if (!keys['KeyA'] && !keys['KeyD']) state.roll *= 0.92;
+		if (!keys['KeyQ'] && !keys['KeyE']) state.yaw *= 0.92;
+		hudStatus.textContent = '\u2328\uFE0F Keyboard mode (WASD + QE + RF)';
+		hudStatus.className = 'val';
+	}
+};
+</script>
+</body>
+</html>
